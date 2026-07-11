@@ -1,6 +1,7 @@
 # Local assistant/editor settings
 .claude/
 .agents/
+AGENTS.md
 
 # OS/editor noise
 .DS_Store
