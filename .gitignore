@@ -1,0 +1,9 @@
+# Local assistant/editor settings
+.claude/
+.agents/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.tmp
+*.log

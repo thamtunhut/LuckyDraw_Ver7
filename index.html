@@ -1,0 +1,2853 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dev by VinhHP2</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Confetti Library -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: "#00f2ff",
+              secondary: "#7000ff",
+              accent: "#ff0055",
+              dark: "#050510",
+              glass: "rgba(20, 20, 35, 0.6)",
+              "glass-border": "rgba(255, 255, 255, 0.1)",
+            },
+            fontFamily: {
+              sans: ["Inter", "sans-serif"],
+              mono: ["Orbitron", "monospace"],
+            },
+            animation: {
+              "spin-slow": "spin 3s linear infinite",
+              "fade-in": "fadeIn 0.3s ease-out",
+              "zoom-in": "zoomIn 0.5s ease-out",
+            },
+            keyframes: {
+              fadeIn: {
+                "0%": { opacity: "0" },
+                "100%": { opacity: "1" },
+              },
+              zoomIn: {
+                "0%": { opacity: "0", transform: "scale(0.8)" },
+                "100%": { opacity: "1", transform: "scale(1)" },
+              },
+            },
+          },
+        },
+      };
+    </script>
+
+    <style>
+      :root {
+        --panel-alpha: 0.6;
+        --panel-blur: 10px;
+        --motion-fast: 180ms;
+        --motion-base: 320ms;
+        --motion-slow: 720ms;
+        --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+        --cyan-rgb: 0, 242, 255;
+        --purple-rgb: 112, 0, 255;
+        --pink-rgb: 255, 0, 85;
+      }
+
+      body {
+        background-color: #050510;
+        background-image:
+          radial-gradient(
+            circle at 15% 50%,
+            rgba(112, 0, 255, 0.15),
+            transparent 25%
+          ),
+          radial-gradient(
+            circle at 85% 30%,
+            rgba(0, 242, 255, 0.15),
+            transparent 25%
+          );
+        background-attachment: fixed;
+        background-size: cover;
+        color: #e2e8f0;
+        min-height: 100vh;
+        overflow-x: hidden;
+        transition: background 0.5s ease;
+        position: relative;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background:
+          linear-gradient(180deg, rgba(5, 5, 16, 0.08), rgba(5, 5, 16, 0.38)),
+          repeating-linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0.012) 0,
+            rgba(255, 255, 255, 0.012) 1px,
+            transparent 1px,
+            transparent 4px
+          );
+        mix-blend-mode: normal;
+      }
+
+      .ambient-stage {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        overflow: hidden;
+        pointer-events: none;
+      }
+
+      .ambient-orb {
+        position: absolute;
+        width: min(54vw, 760px);
+        aspect-ratio: 1;
+        border-radius: 50%;
+        opacity: 0.2;
+        filter: none;
+        transition: opacity 0.8s ease;
+      }
+
+      .ambient-orb--cyan {
+        top: -24%;
+        right: -12%;
+        background: radial-gradient(circle, rgba(var(--cyan-rgb), 0.42), rgba(var(--cyan-rgb), 0.1) 32%, transparent 70%);
+        transform: translate3d(-10%, 8%, 0) scale(1.08);
+      }
+
+      .ambient-orb--purple {
+        bottom: -31%;
+        left: -10%;
+        background: radial-gradient(circle, rgba(var(--purple-rgb), 0.45), rgba(var(--purple-rgb), 0.1) 34%, transparent 72%);
+        transform: translate3d(12%, -8%, 0) scale(1.12);
+      }
+
+      .ambient-orb--pink {
+        top: 35%;
+        left: 35%;
+        width: min(34vw, 480px);
+        opacity: 0.08;
+        background: radial-gradient(circle, rgba(var(--pink-rgb), 0.25), transparent 72%);
+        transform: translate3d(8%, 4%, 0);
+      }
+
+      body.is-drawing .ambient-orb {
+        opacity: 0.31;
+      }
+
+      body.is-drawing .ambient-orb--pink { opacity: 0.15; }
+      #bg-canvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+        pointer-events: none;
+        display: none;
+      }
+
+      #setup-view,
+      #main-view {
+        position: relative;
+        z-index: 20;
+      }
+
+      /* ===== Slot Machine — Reel Style ===== */
+      .scene {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 0.55rem;
+        flex-wrap: wrap;
+        padding: 2rem 0;
+        perspective: 1400px;
+        perspective-origin: 50% 50%;
+      }
+
+      .lottery-stage {
+        isolation: isolate;
+      }
+
+      .stage-halo {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: min(78vw, 900px);
+        height: 170px;
+        border-radius: 50%;
+        background: radial-gradient(ellipse, rgba(var(--cyan-rgb), 0.2), transparent 68%);
+        filter: blur(34px);
+        transform: translate(-50%, -50%);
+        opacity: 0.65;
+        transition: opacity var(--motion-slow), transform var(--motion-slow) var(--ease-out-expo);
+        pointer-events: none;
+      }
+
+      body.is-drawing .stage-halo {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.12);
+      }
+
+      .machine-frame {
+        position: relative;
+        z-index: 2;
+        width: fit-content;
+        max-width: calc(100vw - 2rem);
+        padding: 0.7rem 1rem;
+        border-radius: 24px;
+        background:
+          linear-gradient(145deg, rgba(255,255,255,0.075), transparent 24%),
+          linear-gradient(180deg, rgba(11, 14, 29, 0.86), rgba(4, 5, 14, 0.7));
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow:
+          inset 0 1px 0 rgba(255,255,255,0.09),
+          inset 0 -1px 0 rgba(0,0,0,0.7),
+          0 24px 70px rgba(0,0,0,0.58),
+          0 0 50px rgba(var(--cyan-rgb),0.07);
+      }
+
+      .machine-frame::before {
+        content: "";
+        position: absolute;
+        inset: -1px;
+        z-index: -1;
+        border-radius: inherit;
+        padding: 1px;
+        background: linear-gradient(110deg, transparent 12%, rgba(var(--cyan-rgb),0.62), transparent 44%, rgba(var(--purple-rgb),0.42), transparent 82%);
+        background-size: 240% 100%;
+        opacity: 0.55;
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor;
+        mask-composite: exclude;
+      }
+
+      .machine-frame::after {
+        content: "SYSTEM ONLINE";
+        position: absolute;
+        left: 50%;
+        bottom: -9px;
+        transform: translateX(-50%);
+        padding: 2px 10px;
+        border: 1px solid rgba(var(--cyan-rgb), 0.22);
+        border-radius: 999px;
+        background: #070817;
+        color: rgba(var(--cyan-rgb), 0.7);
+        font: 700 8px/1.2 "Orbitron", monospace;
+        letter-spacing: 0.2em;
+        white-space: nowrap;
+        box-shadow: 0 0 16px rgba(var(--cyan-rgb), 0.1);
+      }
+
+      body.is-drawing .machine-frame::after {
+        content: "DRAWING";
+        color: #fff;
+        border-color: rgba(var(--pink-rgb), 0.58);
+        box-shadow: 0 0 22px rgba(var(--pink-rgb), 0.28);
+      }
+
+      /* One slot window */
+      .slot-wrap {
+        position: relative;
+        border-radius: 12px;
+        overflow: hidden;
+        background: linear-gradient(175deg, #0c0c1e 0%, #06060f 100%);
+        border: 1px solid rgba(0, 242, 255, 0.18);
+        box-shadow:
+          inset 0 2px 0 rgba(255, 255, 255, 0.04),
+          inset 0 0 30px rgba(0, 0, 0, 0.5),
+          0 8px 24px rgba(0, 0, 0, 0.75),
+          0 0 30px rgba(0, 242, 255, 0.04);
+        transition: border-color 0.4s ease, box-shadow 0.5s ease, filter 0.35s ease;
+      }
+
+      .slot-enter {
+        animation: slotEnter 520ms var(--ease-out-expo) both;
+        animation-delay: calc(var(--slot-index, 0) * 45ms);
+      }
+
+      @keyframes slotEnter {
+        from { opacity: 0; clip-path: inset(50% 0 50% 0 round 12px); filter: brightness(1.8); }
+        to { opacity: 1; clip-path: inset(0 0 0 0 round 12px); filter: brightness(1); }
+      }
+
+      .slot-wrap::after {
+        content: "";
+        position: absolute;
+        inset: -35%;
+        z-index: 30;
+        border-radius: 50%;
+        pointer-events: none;
+        opacity: 0;
+        transform: scale(0.3);
+        border: 1px solid rgba(var(--pink-rgb), 0.75);
+      }
+
+      .slot-wrap.is-impacting {
+        animation: slotImpact 520ms var(--ease-out-expo);
+      }
+
+      .slot-wrap.is-impacting::after {
+        animation: impactRing 620ms var(--ease-out-expo);
+      }
+
+      @keyframes slotImpact {
+        0% { filter: brightness(1); }
+        18% { filter: brightness(2.15) saturate(1.4); }
+        100% { filter: brightness(1); }
+      }
+
+      @keyframes impactRing {
+        0% { opacity: 0.85; transform: scale(0.25); }
+        100% { opacity: 0; transform: scale(1.05); }
+      }
+
+      /* Depth gradient — barrel illusion */
+      .slot-wrap::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 10;
+        pointer-events: none;
+        border-radius: 12px;
+        background: linear-gradient(
+          to bottom,
+          rgba(5, 5, 20, 0.95) 0%,
+          rgba(5, 5, 20, 0.5)  18%,
+          rgba(5, 5, 20, 0.06) 36%,
+          transparent          50%,
+          rgba(5, 5, 20, 0.06) 64%,
+          rgba(5, 5, 20, 0.5)  82%,
+          rgba(5, 5, 20, 0.95) 100%
+        );
+      }
+
+      /* Selection bracket */
+      .slot-line-top,
+      .slot-line-bot {
+        position: absolute;
+        left: 4px;
+        right: 4px;
+        height: 1px;
+        z-index: 20;
+        pointer-events: none;
+        transition: background 0.4s ease, box-shadow 0.4s ease;
+        background: linear-gradient(
+          90deg,
+          transparent              0%,
+          rgba(0, 242, 255, 0.45) 12%,
+          rgba(0, 242, 255, 1)    50%,
+          rgba(0, 242, 255, 0.45) 88%,
+          transparent             100%
+        );
+        box-shadow: 0 0 8px rgba(0, 242, 255, 0.55),
+                    0 0 2px rgba(0, 242, 255, 1);
+      }
+      .slot-line-top { top:    calc(50% - 24px); }
+      .slot-line-bot { bottom: calc(50% - 24px); }
+
+      /* Scrolling reel strip */
+      .reel {
+        position: absolute;
+        width: 100%;
+        top: 0;
+        will-change: transform;
+      }
+
+      /* Spinning: motion blur + dim */
+      .slot-wrap.is-spinning .reel {
+        filter: blur(2.5px);
+        opacity: 0.72;
+      }
+
+      /* Each character cell */
+      .reel-item {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "Orbitron", monospace;
+        font-weight: 900;
+        color: rgba(255, 255, 255, 0.92);
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.75);
+        user-select: none;
+        flex-shrink: 0;
+      }
+
+      /* ── Winner state ── */
+      .slot-wrap.is-highlighted {
+        border-color: rgba(255, 0, 85, 0.9);
+        animation: slotWinGlow 1.4s ease-in-out infinite;
+      }
+      @keyframes slotWinGlow {
+        0%, 100% {
+          box-shadow:
+            inset 0 2px 0 rgba(255, 255, 255, 0.04),
+            inset 0 0 20px rgba(255, 0, 85, 0.07),
+            0 8px 24px rgba(0, 0, 0, 0.75),
+            0 0 28px rgba(255, 0, 85, 0.38),
+            0 0 65px rgba(255, 0, 85, 0.1);
+        }
+        50% {
+          box-shadow:
+            inset 0 2px 0 rgba(255, 255, 255, 0.04),
+            inset 0 0 32px rgba(255, 0, 85, 0.14),
+            0 8px 24px rgba(0, 0, 0, 0.75),
+            0 0 50px rgba(255, 0, 85, 0.62),
+            0 0 100px rgba(255, 0, 85, 0.22);
+        }
+      }
+      .slot-wrap.is-highlighted .slot-line-top,
+      .slot-wrap.is-highlighted .slot-line-bot {
+        background: linear-gradient(
+          90deg,
+          transparent            0%,
+          rgba(255, 0, 85, 0.55) 12%,
+          rgba(255, 0, 85, 1)    50%,
+          rgba(255, 0, 85, 0.55) 88%,
+          transparent            100%
+        );
+        box-shadow: 0 0 10px rgba(255, 0, 85, 0.8),
+                    0 0 3px  rgba(255, 0, 85, 1);
+      }
+      .slot-wrap.is-highlighted .reel-item.is-target {
+        color: #ff2060;
+        text-shadow:
+          0 0 12px rgba(255, 0, 85, 0.98),
+          0 0 28px rgba(255, 0, 85, 0.58),
+          0 0 60px rgba(255, 0, 85, 0.24);
+      }
+
+      .slot-wrap.is-highlighted .reel-item.is-target {
+        animation: targetLand 620ms var(--ease-out-expo) both;
+      }
+
+      @keyframes targetLand {
+        0% { opacity: 0.45; transform: scale(1.28); letter-spacing: 0.08em; }
+        55% { opacity: 1; transform: scale(0.94); }
+        100% { opacity: 1; transform: scale(1); letter-spacing: 0; }
+      }
+
+      .glass-panel {
+        background: rgba(20, 20, 35, var(--panel-alpha));
+        backdrop-filter: blur(var(--panel-blur));
+        -webkit-backdrop-filter: blur(var(--panel-blur));
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow:
+          inset 0 1px 0 rgba(255,255,255,0.06),
+          0 20px 60px rgba(0,0,0,0.22);
+      }
+
+      .control-panel {
+        background: linear-gradient(180deg, rgba(20,20,35,0.9), rgba(13,13,26,0.86));
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        contain: paint;
+      }
+
+      .premium-panel {
+        position: relative;
+        isolation: isolate;
+      }
+
+      .view-enter {
+        animation: viewEnter 700ms var(--ease-out-expo) both;
+      }
+
+      .event-title {
+        position: relative;
+        background-size: 220% auto;
+      }
+
+      .event-title::after {
+        content: "";
+        position: absolute;
+        left: 18%;
+        right: 18%;
+        bottom: -12px;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(var(--cyan-rgb),0.65), rgba(var(--purple-rgb),0.55), transparent);
+        box-shadow: 0 0 14px rgba(var(--cyan-rgb),0.3);
+      }
+
+      @keyframes viewEnter {
+        from { opacity: 0; transform: translateY(18px) scale(0.985); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      input[type="text"],
+      input[type="number"],
+      input[type="file"],
+      select,
+      textarea {
+        background-color: rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        outline: none;
+        transition: all 0.3s;
+      }
+      input:focus,
+      select:focus {
+        border-color: #00f2ff;
+        box-shadow: 0 0 0 2px rgba(0, 242, 255, 0.2);
+      }
+
+      /* Range Input Styling */
+      input[type="range"] {
+        -webkit-appearance: none;
+        width: 100%;
+        background: transparent;
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        height: 16px;
+        width: 16px;
+        border-radius: 50%;
+        background: #00f2ff;
+        cursor: pointer;
+        margin-top: -6px;
+        box-shadow: 0 0 10px rgba(0, 242, 255, 0.5);
+      }
+      input[type="range"]::-webkit-slider-runnable-track {
+        width: 100%;
+        height: 4px;
+        cursor: pointer;
+        background: #374151;
+        border-radius: 2px;
+      }
+
+      .btn-neon {
+        background: linear-gradient(90deg, #00f2ff, #00aaff);
+        color: #000;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        box-shadow: 0 0 15px rgba(0, 242, 255, 0.4);
+        transition: all 0.3s;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .btn-neon.is-running {
+        color: #fff;
+        background: linear-gradient(110deg, #ff0055, #9c005c, #7000ff);
+        box-shadow: 0 0 34px rgba(var(--pink-rgb), 0.48);
+      }
+
+      .btn-neon.is-paused {
+        color: #111827;
+        background: linear-gradient(90deg, #ffb000, #ff7a00);
+      }
+      .btn-neon:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 0 25px rgba(0, 242, 255, 0.6);
+      }
+      .btn-neon:active:not(:disabled) {
+        transform: translateY(1px) scale(0.985);
+      }
+      .btn-neon:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        filter: grayscale(1);
+      }
+
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #0f0f1a;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #333;
+        border-radius: 3px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #00f2ff;
+      }
+
+      .winner-card::before,
+      .winner-card::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        pointer-events: none;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+      }
+
+      .winner-card::before {
+        width: 64%;
+        aspect-ratio: 1;
+        background: radial-gradient(circle, rgba(var(--cyan-rgb),0.16), transparent 68%);
+        filter: blur(10px);
+        opacity: 0.5;
+      }
+
+      .winner-card::after {
+        width: 180%;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, rgba(var(--cyan-rgb),0.65), #fff, rgba(var(--pink-rgb),0.55), transparent);
+        opacity: 0;
+        transform: translate(-80%, -50%) rotate(-8deg);
+      }
+
+      .winner-reveal-active {
+        animation: winnerCardReveal 760ms var(--ease-out-expo) both;
+      }
+
+      .winner-card.is-revealing::after {
+        animation: winnerLightSweep 900ms var(--ease-out-expo) both;
+      }
+
+      .winner-reveal-active > * {
+        animation: winnerTextRise 620ms var(--ease-out-expo) both;
+      }
+
+      .winner-reveal-active > *:nth-child(2) { animation-delay: 90ms; }
+      .winner-reveal-active > *:nth-child(3) { animation-delay: 170ms; }
+
+      @keyframes winnerCardReveal {
+        from { opacity: 0; transform: scale(0.9) translateY(14px); filter: blur(8px); }
+        to { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+      }
+
+      @keyframes winnerTextRise {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      @keyframes winnerLightSweep {
+        0% { opacity: 0; transform: translate(-80%, -50%) rotate(-8deg); }
+        18% { opacity: 0.95; }
+        100% { opacity: 0; transform: translate(20%, -50%) rotate(-8deg); }
+      }
+
+      /* ===== Pairing mode: head-to-head battle stage ===== */
+      .battle-stage {
+        position: relative;
+        z-index: 2;
+        width: 100%;
+      }
+
+      .battle-heading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.55rem;
+        margin-bottom: 1rem;
+        color: rgba(255,255,255,0.62);
+        font: 700 0.65rem/1 "Orbitron", monospace;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      .battle-heading::before,
+      .battle-heading::after {
+        content: "";
+        width: 40px;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(var(--cyan-rgb),0.65));
+      }
+
+      .battle-heading::after {
+        background: linear-gradient(90deg, rgba(var(--pink-rgb),0.65), transparent);
+      }
+
+      .battle-prize-label {
+        color: #fff;
+      }
+
+      .battle-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr);
+        align-items: stretch;
+        gap: 0.35rem;
+        width: 100%;
+      }
+
+      .battle-contender {
+        position: relative;
+        min-width: 0;
+        min-height: 155px;
+        padding: 1.15rem 0.9rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        transition: border-color 260ms ease, background 260ms ease, opacity 260ms ease;
+      }
+
+      .battle-contender::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.58;
+      }
+
+      .battle-contender--a {
+        clip-path: polygon(0 0, 88% 0, 100% 50%, 88% 100%, 0 100%);
+        border: 1px solid rgba(var(--cyan-rgb),0.42);
+        background: linear-gradient(135deg, rgba(var(--cyan-rgb),0.18), rgba(4,12,24,0.82) 64%);
+      }
+
+      .battle-contender--a::before {
+        background: linear-gradient(105deg, rgba(var(--cyan-rgb),0.2), transparent 52%);
+      }
+
+      .battle-contender--b {
+        clip-path: polygon(12% 0, 100% 0, 100% 100%, 12% 100%, 0 50%);
+        border: 1px solid rgba(var(--pink-rgb),0.44);
+        background: linear-gradient(225deg, rgba(var(--pink-rgb),0.18), rgba(24,4,14,0.82) 64%);
+      }
+
+      .battle-contender--b::before {
+        background: linear-gradient(255deg, rgba(var(--pink-rgb),0.2), transparent 52%);
+      }
+
+      .battle-side-label,
+      .battle-name,
+      .battle-code {
+        position: relative;
+        z-index: 1;
+      }
+
+      .battle-side-label {
+        margin-bottom: 0.6rem;
+        color: rgba(255,255,255,0.52);
+        font: 700 0.55rem/1 "Orbitron", monospace;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+      }
+
+      .battle-name {
+        width: 100%;
+        min-height: 2.5em;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 1rem;
+        font-weight: 800;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+      }
+
+      .battle-code {
+        margin-top: 0.65rem;
+        padding: 0.25rem 0.55rem;
+        border-radius: 999px;
+        font: 700 0.68rem/1 "Orbitron", monospace;
+        letter-spacing: 0.07em;
+      }
+
+      .battle-contender--a .battle-code {
+        color: #7af8ff;
+        border: 1px solid rgba(var(--cyan-rgb),0.3);
+        background: rgba(var(--cyan-rgb),0.08);
+      }
+
+      .battle-contender--b .battle-code {
+        color: #ff7aa7;
+        border: 1px solid rgba(var(--pink-rgb),0.32);
+        background: rgba(var(--pink-rgb),0.08);
+      }
+
+      .battle-contender.is-searching .battle-name {
+        color: rgba(255,255,255,0.54);
+        font-size: 0.72rem;
+        font-family: "Orbitron", monospace;
+        letter-spacing: 0.06em;
+        animation: battleSearching 1.25s ease-in-out infinite;
+      }
+
+      .battle-contender.is-searching .battle-code { opacity: 0.55; }
+
+      .battle-vs {
+        position: relative;
+        z-index: 4;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .battle-vs-core {
+        width: 52px;
+        height: 52px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: #080918;
+        border: 1px solid rgba(255,255,255,0.24);
+        color: #fff;
+        font: 900 1.05rem/1 "Orbitron", monospace;
+        font-style: italic;
+        text-shadow: -2px 0 10px rgba(var(--cyan-rgb),0.8), 2px 0 10px rgba(var(--pink-rgb),0.8);
+        box-shadow: -8px 0 24px rgba(var(--cyan-rgb),0.18), 8px 0 24px rgba(var(--pink-rgb),0.18);
+      }
+
+      .battle-stage.is-clashing .battle-contender--a {
+        animation: battleClashA 650ms var(--ease-out-expo) both;
+      }
+
+      .battle-stage.is-clashing .battle-contender--b {
+        animation: battleClashB 650ms var(--ease-out-expo) both;
+      }
+
+      .battle-stage.is-clashing .battle-vs-core {
+        animation: battleVsImpact 700ms var(--ease-out-expo) both;
+      }
+
+      @keyframes battleSearching {
+        0%, 100% { opacity: 0.38; }
+        50% { opacity: 0.9; }
+      }
+
+      @keyframes battleClashA {
+        0% { opacity: 0; transform: translateX(-24px); }
+        65% { opacity: 1; transform: translateX(4px); }
+        100% { opacity: 1; transform: translateX(0); }
+      }
+
+      @keyframes battleClashB {
+        0% { opacity: 0; transform: translateX(24px); }
+        65% { opacity: 1; transform: translateX(-4px); }
+        100% { opacity: 1; transform: translateX(0); }
+      }
+
+      @keyframes battleVsImpact {
+        0% { opacity: 0; transform: scale(0.35) rotate(-18deg); }
+        55% { opacity: 1; transform: scale(1.28) rotate(5deg); box-shadow: 0 0 46px rgba(255,255,255,0.36); }
+        100% { opacity: 1; transform: scale(1) rotate(0); }
+      }
+
+      .waiting-indicator::after {
+        content: "";
+        display: block;
+        width: 96px;
+        height: 1px;
+        margin: 12px auto 0;
+        background: linear-gradient(90deg, transparent, rgba(var(--cyan-rgb),0.9), transparent);
+        animation: waitingScan 1.5s ease-in-out infinite;
+      }
+
+      @keyframes waitingScan {
+        0%, 100% { transform: scaleX(0.28); opacity: 0.3; }
+        50% { transform: scaleX(1); opacity: 1; }
+      }
+
+      /* ===== Results panel: compact winner and match cards ===== */
+      .results-panel {
+        background: linear-gradient(180deg, rgba(16,17,34,0.88), rgba(8,9,22,0.9));
+        border-color: rgba(255,255,255,0.13);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 18px 50px rgba(0,0,0,0.28);
+      }
+
+      .results-tabs {
+        padding: 0.55rem;
+        gap: 0.4rem;
+        background: rgba(0,0,0,0.18);
+      }
+
+      .results-tabs .tab-btn {
+        position: relative;
+        min-height: 36px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: rgba(255,255,255,0.48);
+        transition: color 220ms ease, background 220ms ease, border-color 220ms ease;
+      }
+
+      .results-tabs .tab-btn.is-active {
+        color: #fff;
+        border-color: rgba(255,255,255,0.1);
+        background: linear-gradient(110deg, rgba(var(--cyan-rgb),0.12), rgba(var(--purple-rgb),0.2));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+      }
+
+      .results-tabs .tab-btn.is-active::after {
+        content: "";
+        position: absolute;
+        left: 22%;
+        right: 22%;
+        bottom: -0.58rem;
+        height: 2px;
+        border-radius: 99px;
+        background: linear-gradient(90deg, transparent, #00f2ff, #7000ff, transparent);
+      }
+
+      .results-scroll {
+        padding: 0.5rem;
+      }
+
+      .result-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.38rem;
+      }
+
+      .winner-result-card {
+        position: relative;
+        display: grid;
+        grid-template-columns: 34px minmax(0,1fr) auto;
+        align-items: center;
+        gap: 0.65rem;
+        min-height: 54px;
+        padding: 0.5rem 0.65rem;
+        overflow: hidden;
+        border: 1px solid rgba(var(--cyan-rgb),0.14);
+        border-radius: 10px;
+        background: linear-gradient(105deg, rgba(var(--cyan-rgb),0.09), rgba(255,255,255,0.025) 55%, rgba(var(--pink-rgb),0.04));
+      }
+
+      .result-avatar,
+      .match-avatar {
+        display: block;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        object-fit: cover;
+        object-position: center;
+      }
+
+      .result-avatar {
+        width: 32px;
+        height: 32px;
+        border: 1px solid rgba(var(--cyan-rgb),0.62);
+        background: #0b1020;
+        box-shadow: 0 0 16px rgba(var(--cyan-rgb),0.2);
+      }
+
+      .result-person {
+        min-width: 0;
+        text-align: left;
+      }
+
+      .result-person strong {
+        display: block;
+        overflow: hidden;
+        color: #fff;
+        font-size: 0.78rem;
+        line-height: 1.2;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .result-person span {
+        color: rgba(255,255,255,0.43);
+        font: 600 0.58rem/1.4 "Orbitron", monospace;
+      }
+
+      .result-prize {
+        max-width: 112px;
+        padding: 0.25rem 0.45rem;
+        overflow: hidden;
+        border: 1px solid rgba(var(--pink-rgb),0.22);
+        border-radius: 999px;
+        background: rgba(var(--pink-rgb),0.08);
+        color: #ff8eb4;
+        font-size: 0.58rem;
+        font-weight: 700;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .match-card {
+        position: relative;
+        min-height: 64px;
+        padding: 0.38rem 0.5rem 0.48rem;
+        overflow: hidden;
+        border: 1px solid rgba(var(--purple-rgb),0.24);
+        border-radius: 10px;
+        background:
+          linear-gradient(90deg, rgba(var(--cyan-rgb),0.08), transparent 38%, transparent 62%, rgba(var(--pink-rgb),0.08)),
+          rgba(255,255,255,0.025);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
+      }
+
+      .match-card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: 2px;
+        background: linear-gradient(180deg, #00f2ff, #7000ff, #ff0055);
+      }
+
+      .match-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin-bottom: 0.25rem;
+        padding: 0 0.15rem;
+      }
+
+      .match-number {
+        color: rgba(255,255,255,0.38);
+        font: 700 0.5rem/1 "Orbitron", monospace;
+        letter-spacing: 0.1em;
+      }
+
+      .match-prize {
+        max-width: 58%;
+        overflow: hidden;
+        color: #c9a7ff;
+        font-size: 0.52rem;
+        font-weight: 700;
+        text-overflow: ellipsis;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+
+      .match-duel {
+        display: grid;
+        grid-template-columns: minmax(0,1fr) 30px minmax(0,1fr);
+        align-items: center;
+        gap: 0.3rem;
+      }
+
+      .match-fighter {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+      }
+
+      .match-fighter--b {
+        flex-direction: row-reverse;
+        text-align: right;
+      }
+
+      .match-avatar {
+        width: 27px;
+        height: 27px;
+        border: 1px solid rgba(var(--cyan-rgb),0.58);
+        background: #0b1020;
+      }
+
+      .match-fighter--b .match-avatar {
+        border-color: rgba(var(--pink-rgb),0.62);
+        box-shadow: 0 0 12px rgba(var(--pink-rgb),0.14);
+      }
+
+      .match-fighter-info {
+        min-width: 0;
+      }
+
+      .match-fighter-info strong {
+        display: block;
+        overflow: hidden;
+        color: #f8fafc;
+        font-size: 0.68rem;
+        line-height: 1.2;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .match-fighter-info span {
+        color: rgba(255,255,255,0.4);
+        font: 600 0.5rem/1.35 "Orbitron", monospace;
+      }
+
+      .match-vs-mini {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border: 1px solid rgba(255,255,255,0.13);
+        border-radius: 50%;
+        background: #0a0b1b;
+        color: #fff;
+        font: 900 0.55rem/1 "Orbitron", monospace;
+        font-style: italic;
+        text-shadow: -1px 0 7px #00f2ff, 1px 0 7px #ff0055;
+      }
+
+      .winner-list-enter {
+        animation: listItemEnter 520ms var(--ease-out-expo) both;
+        border-left-color: rgba(var(--cyan-rgb), 0.9) !important;
+      }
+
+      .pair-list-enter {
+        position: relative;
+        overflow: hidden;
+        animation: pairItemEnter 650ms var(--ease-out-expo) both;
+      }
+
+      .pair-list-enter::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, transparent, rgba(var(--purple-rgb),0.35), rgba(var(--cyan-rgb),0.2), transparent);
+        transform: translateX(-110%);
+        animation: pairEnergySweep 850ms 120ms var(--ease-out-expo) both;
+        pointer-events: none;
+      }
+
+      .counter-pop { animation: counterPop 420ms var(--ease-out-expo); }
+
+      @keyframes listItemEnter {
+        from { opacity: 0; transform: translateY(-12px) scale(0.97); background-color: rgba(var(--cyan-rgb),0.16); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      @keyframes pairItemEnter {
+        from { opacity: 0; transform: scaleX(0.78) scaleY(0.92); }
+        to { opacity: 1; transform: scale(1); }
+      }
+
+      @keyframes pairEnergySweep { to { transform: translateX(110%); } }
+      @keyframes counterPop {
+        0% { transform: scale(1); }
+        45% { transform: scale(1.45); box-shadow: 0 0 16px currentColor; }
+        100% { transform: scale(1); }
+      }
+
+      .modal-shell:not(.hidden) {
+        animation: modalBackdropIn var(--motion-base) ease-out both;
+      }
+
+      .modal-shell:not(.hidden) > .modal-panel {
+        animation: modalPanelIn 460ms var(--ease-out-expo) both;
+      }
+
+      .history-shell:not(.hidden) {
+        animation: modalBackdropIn var(--motion-base) ease-out both;
+      }
+
+      .history-shell:not(.hidden) > * {
+        animation: historyContentIn 520ms var(--ease-out-expo) both;
+      }
+
+      .history-shell:not(.hidden) > *:nth-child(2) { animation-delay: 70ms; }
+      .history-shell:not(.hidden) > *:nth-child(3) { animation-delay: 130ms; }
+
+      @keyframes modalBackdropIn { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes modalPanelIn {
+        from { opacity: 0; transform: translateY(18px) scale(0.94); filter: blur(5px); }
+        to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+      }
+
+      @keyframes historyContentIn {
+        from { opacity: 0; transform: translateY(14px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      @media (max-width: 768px) {
+        .slot-wrap {
+          width: 45px !important;
+          height: 64px !important;
+        }
+        .slot-line-top { top: calc(50% - 17px); }
+        .slot-line-bot { bottom: calc(50% - 17px); }
+        .reel-item     { font-size: 2rem !important; }
+        .machine-frame { padding: 0.5rem; border-radius: 18px; }
+        .ambient-orb { width: 85vw; filter: blur(65px); }
+        .battle-grid { grid-template-columns: minmax(0, 1fr) 38px minmax(0, 1fr); gap: 0.15rem; }
+        .battle-contender { min-height: 140px; padding: 0.85rem 0.55rem; }
+        .battle-vs-core { width: 42px; height: 42px; font-size: 0.86rem; }
+        .battle-name { font-size: 0.86rem; }
+        .result-prize { max-width: 88px; }
+        .match-avatar { display: none; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          scroll-behavior: auto !important;
+        }
+        .ambient-orb { display: none; }
+      }
+
+      .hidden {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body class="flex flex-col items-center justify-center p-4">
+    <canvas id="bg-canvas"></canvas>
+    <div class="ambient-stage" aria-hidden="true">
+      <span class="ambient-orb ambient-orb--cyan"></span>
+      <span class="ambient-orb ambient-orb--purple"></span>
+      <span class="ambient-orb ambient-orb--pink"></span>
+    </div>
+
+    <!-- ===== SECTION 1: CÀI ĐẶT ===== -->
+    <div
+      id="setup-view"
+      class="w-full max-w-2xl glass-panel premium-panel rounded-2xl p-8 shadow-2xl animate-fade-in relative z-10"
+    >
+      <h1
+        class="text-3xl font-black text-center mb-6 text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary"
+      >
+        SETTING
+      </h1>
+
+      <form id="setup-form" class="space-y-5">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-gray-400 mb-1 uppercase"
+              >Tên Chương Trình</label
+            >
+            <input
+              id="lottery-title-input"
+              type="text"
+              placeholder="Có thể bỏ trống"
+              class="w-full"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-400 mb-1 uppercase"
+              >Số ký tự mã (1-20)</label
+            >
+            <input
+              id="num-digits"
+              type="number"
+              min="1"
+              max="20"
+              value="6"
+              required
+              class="w-full"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-gray-400 mb-1 uppercase"
+            >File Danh Sách (.CSV)</label
+          >
+          <input
+            id="customer-file"
+            type="file"
+            accept=".csv"
+            required
+            class="w-full file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/20 file:text-primary hover:file:bg-primary/30"
+          />
+          <p class="text-[10px] text-gray-500 mt-1">
+            *Cột bắt buộc: "ma_so" và "ten_kh"
+          </p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-gray-400 mb-1 uppercase"
+            >Ảnh nền (Tùy chọn)</label
+          >
+          <input
+            id="background-file"
+            type="file"
+            accept="image/*"
+            class="w-full file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-secondary/20 file:text-secondary hover:file:bg-secondary/30"
+          />
+        </div>
+
+        <div
+          class="p-4 bg-white/5 rounded-lg border border-white/5 grid grid-cols-2 gap-4"
+        >
+          <div>
+            <label
+              class="flex justify-between text-xs font-bold text-gray-400 mb-1"
+            >
+              <span>ĐỘ MỜ PANEL</span>
+              <span id="opacity-label" class="text-primary">0.6</span>
+            </label>
+            <input
+              id="opacity-range"
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value="0.6"
+              class="w-full cursor-pointer"
+            />
+          </div>
+          <div>
+            <label
+              class="flex justify-between text-xs font-bold text-gray-400 mb-1"
+            >
+              <span>ĐỘ BLUR</span>
+              <span id="blur-label" class="text-primary">10px</span>
+            </label>
+            <input
+              id="blur-range"
+              type="range"
+              min="0"
+              max="20"
+              step="1"
+              value="10"
+              class="w-full cursor-pointer"
+            />
+          </div>
+        </div>
+
+        <div class="p-4 bg-white/5 rounded-lg border border-white/5">
+          <label
+            class="flex justify-between text-xs font-bold text-gray-400 mb-1 uppercase"
+          >
+            <span>Tốc độ dừng mỗi ô số (Nhanh - Chậm)</span>
+            <span id="spin-speed-label" class="text-primary">600 ms</span>
+          </label>
+          <input
+            id="spin-speed"
+            type="range"
+            min="100"
+            max="2000"
+            step="100"
+            value="600"
+            class="w-full cursor-pointer"
+          />
+          <p class="text-[10px] text-gray-500 mt-2">
+            *Tốc độ dừng của mỗi ô số.
+          </p>
+        </div>
+
+        <div class="flex gap-6">
+          <label class="flex items-center gap-2 cursor-pointer group">
+            <div class="relative">
+              <input
+                type="checkbox"
+                id="multi-winner-mode"
+                class="peer sr-only"
+              />
+              <div
+                class="w-10 h-6 bg-gray-700 rounded-full peer-checked:bg-primary transition-all"
+              ></div>
+              <div
+                class="absolute top-1 left-1 w-4 h-4 bg-white rounded-full peer-checked:translate-x-4 transition-all"
+              ></div>
+            </div>
+            <span
+              class="text-sm font-semibold group-hover:text-white transition"
+              >Quay nhiều giải</span
+            >
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer group">
+            <div class="relative">
+              <input type="checkbox" id="pairing-mode" class="peer sr-only" />
+              <div
+                class="w-10 h-6 bg-gray-700 rounded-full peer-checked:bg-secondary transition-all"
+              ></div>
+              <div
+                class="absolute top-1 left-1 w-4 h-4 bg-white rounded-full peer-checked:translate-x-4 transition-all"
+              ></div>
+            </div>
+            <span
+              class="text-sm font-semibold group-hover:text-white transition"
+              >Ghép cặp</span
+            >
+          </label>
+        </div>
+
+        <div class="border-t border-white/10 pt-4">
+          <label class="block text-xs font-bold text-gray-400 mb-2 uppercase"
+            >Cơ Cấu Giải Thưởng</label
+          >
+          <div
+            id="prizes-container"
+            class="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar"
+          ></div>
+          <button
+            type="button"
+            id="add-prize-btn"
+            class="mt-2 text-xs flex items-center gap-1 text-primary hover:text-white transition"
+          >
+            <span class="text-lg">+</span> Thêm giải thưởng
+          </button>
+        </div>
+
+        <button
+          type="submit"
+          class="w-full py-4 rounded-xl btn-neon text-lg mt-4"
+        >
+          READY
+        </button>
+      </form>
+    </div>
+
+    <!-- ===== SECTION 2: MAIN VIEW ===== -->
+    <div
+      id="main-view"
+      class="hidden w-full max-w-7xl flex-col items-center relative z-10"
+    >
+      <header
+        class="w-full flex justify-center items-center mb-8 px-4 relative"
+      >
+        <h1
+          id="lottery-title-display"
+          class="event-title text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-primary/80 to-gray-400 tracking-wider drop-shadow-[0_0_10px_rgba(255,255,255,0.3)] text-center"
+        >
+          LUCKY DRAW
+        </h1>
+      </header>
+
+      <div class="lottery-stage w-full relative py-12 flex justify-center">
+        <div class="stage-halo" aria-hidden="true"></div>
+        <div class="machine-frame">
+          <div id="lottery-display" class="scene z-10"></div>
+        </div>
+      </div>
+
+      <div
+        class="control-panel w-full max-w-4xl glass-panel rounded-2xl p-4 flex flex-col md:flex-row items-center gap-4 border border-primary/20 shadow-[0_0_30px_rgba(0,242,255,0.1)]"
+      >
+        <select
+          id="prize-select"
+          class="bg-dark/50 border border-white/10 text-white rounded-lg p-3 flex-1 font-mono text-sm focus:border-primary w-full"
+        ></select>
+        <button
+          id="start-btn"
+          class="px-10 py-3 rounded-xl btn-neon font-black text-xl min-w-[200px] relative overflow-hidden group"
+        >
+          <span class="relative z-10">QUAY SỐ</span>
+          <div
+            class="absolute inset-0 bg-white/30 blur opacity-0 group-hover:opacity-100 transition"
+          ></div>
+        </button>
+      </div>
+
+      <div class="w-full max-w-5xl mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div
+          id="winner-card"
+          class="winner-card glass-panel premium-panel rounded-2xl p-6 min-h-[300px] flex flex-col items-center justify-center text-center relative overflow-hidden"
+        >
+          <div
+            id="winner-info"
+            class="hidden animate-zoom-in w-full flex flex-col items-center"
+          >
+            <div
+              class="text-accent font-bold tracking-widest mb-2 uppercase text-sm"
+            >
+              Chúc mừng
+            </div>
+            <div
+              id="winner-name"
+              class="text-3xl md:text-4xl font-bold text-white mb-2 text-glow"
+            ></div>
+            <div
+              id="winner-code"
+              class="text-xl font-mono text-primary bg-primary/10 px-4 py-1 rounded-full inline-block border border-primary/30 mb-4"
+            ></div>
+          </div>
+
+          <div id="battle-stage" class="battle-stage hidden" aria-live="polite">
+            <div class="battle-heading">
+              <span>Trận đấu</span>
+              <span id="battle-prize-label" class="battle-prize-label"></span>
+            </div>
+            <div class="battle-grid">
+              <div id="battle-player-a" class="battle-contender battle-contender--a">
+                <div class="battle-side-label">Người chơi 1</div>
+                <div id="battle-name-a" class="battle-name">Đang chờ...</div>
+                <div id="battle-code-a" class="battle-code">---</div>
+              </div>
+              <div class="battle-vs" aria-hidden="true">
+                <div class="battle-vs-core">VS</div>
+              </div>
+              <div id="battle-player-b" class="battle-contender battle-contender--b">
+                <div class="battle-side-label">Người chơi 2</div>
+                <div id="battle-name-b" class="battle-name">Đang chờ...</div>
+                <div id="battle-code-b" class="battle-code">---</div>
+              </div>
+            </div>
+          </div>
+
+          <div
+            id="waiting-msg"
+            class="waiting-indicator text-gray-500 font-mono text-xs uppercase tracking-widest animate-pulse"
+          >
+            Hệ thống sẵn sàng...
+          </div>
+        </div>
+
+        <div class="results-panel glass-panel rounded-2xl p-1 flex flex-col h-[300px]">
+          <div class="results-tabs flex border-b border-white/10" id="lists-tabs">
+            <button
+              class="flex-1 py-2 text-sm font-bold rounded-lg bg-white/10 text-white tab-btn is-active"
+              data-tab="tab-winners"
+            >
+              Danh sách
+              <span
+                id="count-winners"
+                class="bg-primary text-black text-[10px] px-1.5 rounded-full ml-1"
+                >0</span
+              >
+            </button>
+            <button
+              id="tab-btn-pairs"
+              class="flex-1 py-2 text-sm font-bold rounded-lg text-gray-400 hover:bg-white/5 tab-btn hidden"
+              data-tab="tab-pairs"
+            >
+              Cặp đôi
+              <span
+                id="count-pairs"
+                class="bg-secondary text-white text-[10px] px-1.5 rounded-full ml-1"
+                >0</span
+              >
+            </button>
+          </div>
+          <div class="results-scroll flex-1 overflow-hidden relative">
+            <ul
+              id="tab-winners"
+              class="result-list tab-panel active h-full overflow-y-auto custom-scrollbar"
+            ></ul>
+            <ul
+              id="tab-pairs"
+              class="result-list tab-panel hidden h-full overflow-y-auto custom-scrollbar"
+            ></ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- HISTORY PANEL -->
+      <div
+        id="history-panel"
+        class="history-shell fixed inset-0 z-50 bg-dark/95 backdrop-blur-xl hidden flex flex-col p-4 md:p-10"
+      >
+        <div
+          class="flex justify-between items-center mb-6 max-w-6xl mx-auto w-full"
+        >
+          <h2 class="text-3xl font-bold text-primary">LỊCH SỬ QUAY SỐ</h2>
+          <button
+            id="close-history-btn"
+            class="text-gray-400 hover:text-white text-2xl"
+          >
+            &times;
+          </button>
+        </div>
+
+        <div
+          class="flex-1 overflow-auto max-w-6xl mx-auto w-full border border-white/10 rounded-xl bg-black/20"
+        >
+          <table id="history-table" class="w-full text-left text-sm">
+            <thead
+              class="bg-white/5 text-gray-400 sticky top-0 backdrop-blur-md"
+            >
+              <tr>
+                <th class="p-4">Hạng mục</th>
+                <th class="p-4">Mã số</th>
+                <th class="p-4">Tên người chơi</th>
+              </tr>
+            </thead>
+            <tbody
+              id="history-body"
+              class="divide-y divide-white/5 text-gray-200"
+            ></tbody>
+          </table>
+        </div>
+
+        <div class="max-w-6xl mx-auto w-full flex gap-4 mt-6">
+          <button
+            id="export-btn"
+            class="px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-lg font-bold flex-1"
+          >
+            Xuất CSV
+          </button>
+          <button
+            id="reset-btn"
+            class="px-6 py-3 bg-red-900/50 hover:bg-red-800 text-red-200 rounded-lg font-bold"
+          >
+            Cài đặt lại
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== MODALS ===== -->
+
+    <div
+      id="confirmation-modal"
+      class="modal-shell fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300"
+    >
+      <div
+        class="modal-panel glass-panel premium-panel p-8 rounded-2xl max-w-md w-full text-center border border-primary/30 shadow-[0_0_50px_rgba(0,242,255,0.2)] transform scale-95 transition-transform duration-300"
+        id="confirm-content"
+      >
+        <h3 class="text-2xl font-bold text-white mb-4">XÁC NHẬN KẾT QUẢ</h3>
+        <p class="text-gray-300 mb-6">
+          Người chơi
+          <strong id="modal-winner-name" class="text-primary text-lg"></strong>
+          (<span id="modal-winner-code" class="font-mono"></span>) đã trúng
+          thưởng?
+        </p>
+        <div class="flex gap-4 justify-center">
+          <button
+            id="confirm-btn"
+            class="px-6 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold rounded hover:scale-105 transition"
+          >
+            CHẤP NHẬN
+          </button>
+          <button
+            id="redraw-btn"
+            class="px-6 py-2 bg-white/10 text-gray-300 font-bold rounded hover:bg-white/20 transition"
+          >
+            QUAY LẠI
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="restore-modal"
+      class="modal-shell fixed inset-0 z-[70] flex items-center justify-center bg-black/90 hidden"
+    >
+      <div
+        class="modal-panel premium-panel bg-gray-900 border border-white/20 p-6 rounded-xl max-w-md w-full text-center shadow-2xl"
+      >
+        <h3 class="text-xl font-bold text-primary mb-4 uppercase">
+          Phát hiện phiên cũ
+        </h3>
+        <p class="text-gray-300 mb-6">
+          Hệ thống phát hiện có phiên quay thưởng chưa kết thúc. Bạn có muốn
+          khôi phục lại không?
+        </p>
+        <div class="flex gap-4 justify-center">
+          <button
+            id="restore-yes-btn"
+            class="px-6 py-2 bg-green-600 hover:bg-green-500 text-white rounded font-bold"
+          >
+            Khôi phục
+          </button>
+          <button
+            id="restore-no-btn"
+            class="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded"
+          >
+            Bỏ qua
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="custom-alert-modal"
+      class="modal-shell fixed inset-0 z-[80] flex items-center justify-center bg-black/90 hidden"
+    >
+      <div
+        class="modal-panel premium-panel bg-gray-900 border border-white/20 p-6 rounded-xl max-w-sm w-full text-center"
+      >
+        <h3 id="custom-alert-title" class="text-xl font-bold text-accent mb-2">
+          Thông báo
+        </h3>
+        <p id="custom-alert-message" class="text-gray-300 mb-6"></p>
+        <button
+          id="custom-alert-ok-btn"
+          class="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded"
+        >
+          OK
+        </button>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        // --- Helper: Visual Effects & 3D Logic ---
+
+        // Per-slot reel state
+        let slots = [];
+
+        const create3DCubes = (container, count) => {
+          container.innerHTML = "";
+          slots = [];
+
+          let fontSize = "3.5rem";
+          let slotW = 80, slotH = 110;
+          if (count > 8)  { fontSize = "2rem";   slotW = 56; slotH = 78; }
+          if (count > 12) { fontSize = "1.5rem"; slotW = 46; slotH = 64; }
+
+          for (let i = 0; i < count; i++) {
+            const wrap = document.createElement("div");
+            wrap.className = "slot-wrap slot-enter";
+            wrap.id = `cube-${i}`;
+            wrap.style.setProperty("--slot-index", i);
+            wrap.style.width  = slotW + "px";
+            wrap.style.height = slotH + "px";
+
+            // Slight arc across the row for 3D depth
+            const arcAngle = (i - (count - 1) / 2) * 2.5;
+            wrap.style.transform = `rotateY(${arcAngle}deg)`;
+
+            const reel = document.createElement("div");
+            reel.className = "reel";
+
+            const initItem = document.createElement("div");
+            initItem.className = "reel-item";
+            initItem.style.height   = slotH + "px";
+            initItem.style.fontSize = fontSize;
+            initItem.textContent    = "-";
+            reel.appendChild(initItem);
+
+            const lineTop = document.createElement("div");
+            lineTop.className = "slot-line-top";
+            const lineBot = document.createElement("div");
+            lineBot.className = "slot-line-bot";
+
+            wrap.appendChild(reel);
+            wrap.appendChild(lineTop);
+            wrap.appendChild(lineBot);
+            container.appendChild(wrap);
+
+            slots.push({ wrap, reel, y: 0, targetY: 0, interval: null, itemH: slotH, fontSize });
+          }
+        };
+
+        const setCubeSpin = (index, isSpinning) => {
+          const wrap = document.getElementById(`cube-${index}`);
+          if (!wrap) return;
+          if (isSpinning) {
+            wrap.classList.add("is-spinning");
+          } else {
+            wrap.classList.remove("is-spinning");
+          }
+        };
+
+        const getRandomChar = () => {
+          const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+          return chars[Math.floor(Math.random() * chars.length)];
+        };
+
+        // ── Reel helpers ──
+
+        const PRE_ITEMS = 25; // random chars before target in stop sequence
+
+        const buildReel = (idx, targetChar) => {
+          const s = slots[idx];
+          s.reel.innerHTML = "";
+          const total = PRE_ITEMS + 1 + 2; // pre + target + 2 trailing buffer
+          for (let j = 0; j < total; j++) {
+            const div = document.createElement("div");
+            div.className = "reel-item";
+            div.style.height   = s.itemH + "px";
+            div.style.fontSize = s.fontSize;
+            if (j === PRE_ITEMS) {
+              div.textContent = targetChar;
+              div.classList.add("is-target");
+            } else {
+              div.textContent = getRandomChar();
+            }
+            s.reel.appendChild(div);
+          }
+          s.targetY = -(PRE_ITEMS * s.itemH);
+          s.reel.style.transition = "none";
+          s.reel.style.transform  = "translateY(0)";
+        };
+
+        const stopSlotSpin = (idx) => {
+          return new Promise((resolve) => {
+            const s = slots[idx];
+            if (s.interval) { clearInterval(s.interval); s.interval = null; }
+
+            // End blur immediately — sharp reel scroll looks cleaner
+            setCubeSpin(idx, false);
+
+            void s.reel.offsetWidth; // force reflow
+
+            const dur = 1.5; // seconds — consistent deceleration feel
+            s.reel.style.transition = `transform ${dur}s cubic-bezier(0.08, 0.92, 0.18, 1)`;
+            s.reel.style.transform  = `translateY(${s.targetY}px)`;
+
+            s.reel.addEventListener("transitionend", () => {
+              s.wrap.classList.remove("is-impacting");
+              void s.wrap.offsetWidth;
+              s.wrap.classList.add("is-impacting");
+              setTimeout(() => s.wrap.classList.add("is-highlighted"), 60);
+              setTimeout(() => s.wrap.classList.remove("is-impacting"), 650);
+              resolve();
+            }, { once: true });
+          });
+        };
+
+        const resetSlotDisplay = () => {
+          slots.forEach((s, i) => {
+            if (s.interval) { clearInterval(s.interval); s.interval = null; }
+            s.wrap.classList.remove("is-highlighted", "is-spinning", "is-impacting");
+            s.reel.innerHTML = "";
+            s.reel.style.transition = "none";
+            s.reel.style.transform  = "translateY(0)";
+            const div = document.createElement("div");
+            div.className      = "reel-item";
+            div.style.height   = s.itemH + "px";
+            div.style.fontSize = s.fontSize;
+            div.textContent    = "-";
+            s.reel.appendChild(div);
+          });
+        };
+
+        // --- MAIN LOGIC ---
+
+        let customers = [];
+        let prizes = [];
+        let winners = [];
+        let numDigits = 6;
+        let tempWinner = null;
+        let tempPrize = null;
+        let isMultiWinnerMode = false;
+        let pairingEnabled = false;
+        let pendingPartner = null;
+        let pairs = [];
+        let spinDelay = 600;
+
+        // PAUSE CONTROL VARIABLES
+        let isMultiRunning = false;
+        let isMultiPaused = false;
+        let resumeMulti = null;
+
+        /* DOM Elements */
+        const setupView = document.getElementById("setup-view");
+        const mainView = document.getElementById("main-view");
+        const setupForm = document.getElementById("setup-form");
+        const prizesContainer = document.getElementById("prizes-container");
+        const lotteryDisplay = document.getElementById("lottery-display");
+        const prizeSelect = document.getElementById("prize-select");
+        const startBtn = document.getElementById("start-btn");
+        const winnerInfo = document.getElementById("winner-info");
+        const winnerNameSpan = document.getElementById("winner-name");
+        const winnerCodeSpan = document.getElementById("winner-code");
+        const historyBody = document.getElementById("history-body");
+        const winnerCard = document.getElementById("winner-card");
+        const waitingMsg = document.getElementById("waiting-msg");
+        const battleStage = document.getElementById("battle-stage");
+        const battlePrizeLabel = document.getElementById("battle-prize-label");
+        const battleSlotA = {
+          root: document.getElementById("battle-player-a"),
+          name: document.getElementById("battle-name-a"),
+          code: document.getElementById("battle-code-a"),
+        };
+        const battleSlotB = {
+          root: document.getElementById("battle-player-b"),
+          name: document.getElementById("battle-name-b"),
+          code: document.getElementById("battle-code-b"),
+        };
+
+        const recentWinnersList = document.getElementById("tab-winners");
+        const pairsList = document.getElementById("tab-pairs");
+
+        const confirmationModal = document.getElementById("confirmation-modal");
+        const confirmBtn = document.getElementById("confirm-btn");
+        const redrawBtn = document.getElementById("redraw-btn");
+        const tabBtnPairs = document.getElementById("tab-btn-pairs");
+
+        const spinSpeedInput = document.getElementById("spin-speed");
+        const spinSpeedLabel = document.getElementById("spin-speed-label");
+
+        // Visual-only helpers. These never mutate lottery data or prize state.
+        const pulseCounter = (element) => {
+          if (!element) return;
+          element.classList.remove("counter-pop");
+          void element.offsetWidth;
+          element.classList.add("counter-pop");
+          setTimeout(() => element.classList.remove("counter-pop"), 450);
+        };
+
+        const playWinnerReveal = () => {
+          winnerInfo.classList.remove("winner-reveal-active");
+          if (winnerCard) winnerCard.classList.remove("is-revealing");
+          void winnerInfo.offsetWidth;
+          winnerInfo.classList.add("winner-reveal-active");
+          if (winnerCard) winnerCard.classList.add("is-revealing");
+          setTimeout(() => {
+            if (winnerCard) winnerCard.classList.remove("is-revealing");
+          }, 1000);
+        };
+
+        const setDrawVisualState = (isRunning, isPaused = false) => {
+          document.body.classList.toggle("is-drawing", isRunning);
+          document.body.classList.toggle("is-draw-paused", isRunning && isPaused);
+          startBtn.classList.toggle("is-running", isRunning);
+          startBtn.classList.toggle("is-paused", isRunning && isPaused);
+        };
+
+        const setBattleContender = (
+          slot,
+          player,
+          placeholder = "Đang chờ...",
+          placeholderCode = "---",
+          isSearching = false,
+        ) => {
+          if (!slot.root || !slot.name || !slot.code) return;
+          slot.root.classList.toggle("is-searching", isSearching);
+          slot.name.textContent = player ? player.ten_kh : placeholder;
+          slot.code.textContent = player ? player.ma_so : placeholderCode;
+        };
+
+        const showBattleStage = (prizeName = "") => {
+          if (!battleStage) return;
+          battleStage.classList.remove("hidden");
+          battleStage.classList.remove("is-clashing");
+          winnerInfo.classList.add("hidden");
+          waitingMsg.classList.add("hidden");
+          battlePrizeLabel.textContent = prizeName ? `• ${prizeName}` : "";
+        };
+
+        const renderBattleWaiting = (player, prizeName = "") => {
+          showBattleStage(prizeName);
+          setBattleContender(battleSlotA, player);
+          setBattleContender(
+            battleSlotB,
+            null,
+            "Đang tìm đối thủ...",
+            "SEARCHING",
+            true,
+          );
+        };
+
+        const renderBattleMatch = (playerA, playerB, prizeName = "") => {
+          showBattleStage(prizeName);
+          setBattleContender(battleSlotA, playerA);
+          setBattleContender(battleSlotB, playerB);
+          void battleStage.offsetWidth;
+          battleStage.classList.add("is-clashing");
+        };
+
+        const prepareBattleForSpin = (prizeName = "") => {
+          if (!pairingEnabled || !battleStage) return;
+          if (pendingPartner) {
+            renderBattleWaiting(pendingPartner, prizeName);
+            return;
+          }
+          showBattleStage(prizeName);
+          setBattleContender(
+            battleSlotA,
+            null,
+            "Đang tìm người chơi 1...",
+            "SCANNING",
+            true,
+          );
+          setBattleContender(battleSlotB, null, "Chờ đối thủ", "STANDBY");
+        };
+
+        const restorePairingDisplay = () => {
+          if (!pairingEnabled || !battleStage) return;
+          if (pendingPartner) {
+            renderBattleWaiting(pendingPartner);
+          } else {
+            battleStage.classList.add("hidden");
+            battleStage.classList.remove("is-clashing");
+            waitingMsg.classList.remove("hidden");
+          }
+        };
+
+        const escapeHTML = (value) =>
+          String(value ?? "").replace(/[&<>"']/g, (char) => ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#039;",
+          })[char]);
+
+        const createWinnerListItem = (winner, prizeName, animate = false) => {
+          const li = document.createElement("li");
+          li.className = `${animate ? "winner-list-enter " : ""}winner-result-card`;
+          li.innerHTML = `
+            <img class="result-avatar" src="app_icon.jpg" alt="" loading="lazy" decoding="async" aria-hidden="true" />
+            <div class="result-person">
+              <strong title="${escapeHTML(winner.ten_kh)}">${escapeHTML(winner.ten_kh)}</strong>
+              <span>${escapeHTML(winner.ma_so)}</span>
+            </div>
+            <div class="result-prize" title="${escapeHTML(prizeName)}">${escapeHTML(prizeName)}</div>
+          `;
+          return li;
+        };
+
+        const createPairListItem = (pair, matchNumber, animate = false) => {
+          const li = document.createElement("li");
+          li.className = `${animate ? "pair-list-enter " : ""}match-card`;
+          li.innerHTML = `
+            <div class="match-meta">
+              <span class="match-number">TRẬN #${String(matchNumber).padStart(2, "0")}</span>
+              <span class="match-prize" title="${escapeHTML(pair.prizeName)}">${escapeHTML(pair.prizeName)}</span>
+            </div>
+            <div class="match-duel">
+              <div class="match-fighter match-fighter--a">
+                <img class="match-avatar" src="app_icon.jpg" alt="" loading="lazy" decoding="async" aria-hidden="true" />
+                <div class="match-fighter-info">
+                  <strong title="${escapeHTML(pair.a.ten_kh)}">${escapeHTML(pair.a.ten_kh)}</strong>
+                  <span>${escapeHTML(pair.a.ma_so)}</span>
+                </div>
+              </div>
+              <div class="match-vs-mini">VS</div>
+              <div class="match-fighter match-fighter--b">
+                <img class="match-avatar" src="app_icon.jpg" alt="" loading="lazy" decoding="async" aria-hidden="true" />
+                <div class="match-fighter-info">
+                  <strong title="${escapeHTML(pair.b.ten_kh)}">${escapeHTML(pair.b.ten_kh)}</strong>
+                  <span>${escapeHTML(pair.b.ma_so)}</span>
+                </div>
+              </div>
+            </div>
+          `;
+          return li;
+        };
+
+        if (spinSpeedInput) {
+          spinSpeedInput.addEventListener("input", (e) => {
+            spinDelay = parseInt(e.target.value);
+            if (spinSpeedLabel) spinSpeedLabel.textContent = `${spinDelay} ms`;
+          });
+        }
+
+        /* Utilities */
+        const showAlert = (message) => {
+          const modal = document.getElementById("custom-alert-modal");
+          const msg = document.getElementById("custom-alert-message");
+          const ok = document.getElementById("custom-alert-ok-btn");
+          if (!modal || !msg || !ok) return Promise.resolve();
+
+          msg.textContent = message;
+          modal.classList.remove("hidden");
+          return new Promise((resolve) => {
+            ok.onclick = () => {
+              modal.classList.add("hidden");
+              resolve();
+            };
+          });
+        };
+
+        const checkPause = async () => {
+          if (isMultiPaused) {
+            await new Promise((resolve) => {
+              resumeMulti = resolve;
+            });
+          }
+        };
+
+        // --- SESSION STORAGE ---
+        const saveSession = () => {
+          const sessionData = {
+            customers,
+            prizes,
+            winners,
+            pairs,
+            config: {
+              numDigits,
+              isMultiWinnerMode,
+              pairingEnabled,
+              title: document.getElementById("lottery-title-display")
+                .textContent,
+              spinDelay,
+            },
+          };
+          localStorage.setItem("luckyDrawSession", JSON.stringify(sessionData));
+        };
+
+        const clearSession = () => {
+          localStorage.removeItem("luckyDrawSession");
+        };
+
+        const renderHistoryTable = () => {
+          const thead = document.querySelector("#history-table thead tr");
+          const tbody = document.getElementById("history-body");
+          tbody.innerHTML = "";
+
+          if (pairingEnabled) {
+            thead.innerHTML =
+              '<th class="p-4">Hạng mục</th><th class="p-4">Cặp đấu</th><th class="p-4">Mã số cặp</th>';
+            [...pairs].reverse().forEach((p) => {
+              const row = document.createElement("tr");
+              row.className = "hover:bg-white/5 transition";
+              row.innerHTML = `<td class="p-3 border-b border-white/5 text-accent">${p.prizeName}</td>
+                                         <td class="p-3 border-b border-white/5 font-bold">${p.a.ten_kh} <span class="text-gray-500 text-xs">vs</span> ${p.b.ten_kh}</td>
+                                         <td class="p-3 border-b border-white/5 font-mono text-xs text-gray-400">${p.a.ma_so} - ${p.b.ma_so}</td>`;
+              tbody.appendChild(row);
+            });
+          } else {
+            thead.innerHTML =
+              '<th class="p-4">Hạng mục</th><th class="p-4">Mã số</th><th class="p-4">Tên người chơi</th>';
+            [...winners].reverse().forEach((w) => {
+              const row = document.createElement("tr");
+              row.className = "hover:bg-white/5 transition";
+              row.innerHTML = `<td class="p-3 border-b border-white/5 text-accent">${w.prizeName}</td><td class="p-3 border-b border-white/5 font-mono">${w.ma_so}</td><td class="p-3 border-b border-white/5 font-bold">${w.ten_kh}</td>`;
+              tbody.appendChild(row);
+            });
+          }
+        };
+
+        const restoreSession = () => {
+          const raw = localStorage.getItem("luckyDrawSession");
+          if (!raw) return;
+          try {
+            const data = JSON.parse(raw);
+            customers = data.customers;
+            prizes = data.prizes;
+            winners = data.winners;
+            pairs = data.pairs || [];
+            numDigits = data.config.numDigits;
+            isMultiWinnerMode = data.config.isMultiWinnerMode;
+            pairingEnabled = data.config.pairingEnabled;
+            spinDelay = data.config.spinDelay || 600;
+
+            if (spinSpeedInput) {
+              spinSpeedInput.value = spinDelay;
+              if (spinSpeedLabel)
+                spinSpeedLabel.textContent = `${spinDelay} ms`;
+            }
+
+            const titleDisplay = document.getElementById(
+              "lottery-title-display",
+            );
+            titleDisplay.textContent = data.config.title;
+            if (data.config.title === "") titleDisplay.classList.add("hidden");
+            else titleDisplay.classList.remove("hidden");
+
+            if (pairingEnabled) {
+              tabBtnPairs.classList.remove("hidden");
+            } else {
+              tabBtnPairs.classList.add("hidden");
+            }
+
+            initializeApp(true);
+
+            recentWinnersList.innerHTML = "";
+            [...winners].reverse().forEach((w) => {
+              recentWinnersList.appendChild(
+                createWinnerListItem(w, w.prizeName, false),
+              );
+            });
+            document.getElementById("count-winners").textContent =
+              winners.length;
+
+            pairsList.innerHTML = "";
+            [...pairs].reverse().forEach((p, reverseIndex) => {
+              pairsList.appendChild(
+                createPairListItem(p, pairs.length - reverseIndex, false),
+              );
+            });
+            document.getElementById("count-pairs").textContent = pairs.length;
+
+            renderHistoryTable();
+
+            setupView.classList.add("hidden");
+            mainView.classList.remove("hidden");
+            mainView.classList.add("flex");
+          } catch (e) {
+            console.error("Restore failed", e);
+            showAlert("Dữ liệu cũ bị lỗi, không thể khôi phục.");
+            clearSession();
+          }
+        };
+
+        const savedSession = localStorage.getItem("luckyDrawSession");
+        if (savedSession) {
+          const restoreModal = document.getElementById("restore-modal");
+          restoreModal.classList.remove("hidden");
+
+          document.getElementById("restore-yes-btn").onclick = () => {
+            restoreModal.classList.add("hidden");
+            restoreSession();
+          };
+
+          document.getElementById("restore-no-btn").onclick = () => {
+            restoreModal.classList.add("hidden");
+            clearSession();
+          };
+        }
+
+        const addPrizeRow = (name = "", qty = 1) => {
+          const id =
+            "prize-" + Date.now() + Math.random().toString(36).substr(2, 9);
+          const div = document.createElement("div");
+          div.className =
+            "flex gap-3 items-center bg-white/5 p-3 rounded mb-2 border border-white/5 transition hover:bg-white/10 prize-row";
+          div.id = id;
+          div.innerHTML = `
+                    <input type="text" value="${name}" placeholder="Tên giải thưởng (VD: Giải Đặc Biệt)" class="flex-1 min-w-0 bg-dark/50 border border-white/10 rounded px-3 py-2 text-sm focus:border-primary focus:outline-none transition text-white" required>
+                    <input type="number" value="${qty}" placeholder="SL" class="flex-none bg-dark/50 border border-white/10 rounded px-2 py-2 text-center text-sm focus:border-primary focus:outline-none transition text-white" value="1" min="1" style="width: 100px;">
+                    <button type="button" class="delete-prize-btn text-red-400 hover:text-red-200 px-2 font-bold text-xl" title="Xóa">&times;</button>
+                `;
+          prizesContainer.appendChild(div);
+        };
+
+        prizesContainer.addEventListener("click", (e) => {
+          if (e.target.classList.contains("delete-prize-btn")) {
+            e.target.closest(".prize-row").remove();
+          }
+        });
+
+        addPrizeRow();
+        document
+          .getElementById("add-prize-btn")
+          .addEventListener("click", () => addPrizeRow());
+
+        const parseCSV = (text) => {
+          const rows = text.split(/\r?\n/).filter((r) => r.trim() !== "");
+          if (rows.length < 2) return [];
+          const header = rows[0].split(",").map((h) => h.trim().toLowerCase());
+          const codeIdx = header.indexOf("ma_so");
+          const nameIdx = header.indexOf("ten_kh");
+          if (codeIdx === -1 || nameIdx === -1)
+            throw new Error('File thiếu cột "ma_so" hoặc "ten_kh"');
+
+          return rows
+            .slice(1)
+            .map((row) => {
+              const cols = row.split(",");
+              if (cols.length >= header.length) {
+                return {
+                  ma_so: cols[codeIdx].trim(),
+                  ten_kh: cols[nameIdx].trim(),
+                  isWinner: false,
+                };
+              }
+              return null;
+            })
+            .filter(Boolean);
+        };
+
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+        const stopDigitsSequentially = (code) =>
+          new Promise(async (resolve) => {
+            const targetCode = code.toUpperCase().padStart(numDigits, " ");
+
+            // Pre-build all reels so target chars are placed before spinning starts
+            for (let i = 0; i < numDigits; i++) {
+              buildReel(i, targetCode[i] || " ");
+            }
+
+            // Start all slots spinning (blur + rapid char cycling)
+            for (let i = 0; i < numDigits; i++) {
+              setCubeSpin(i, true);
+              const idx = i;
+              slots[idx].interval = setInterval(() => {
+                const first = slots[idx].reel.querySelector(".reel-item");
+                if (first) first.textContent = getRandomChar();
+              }, 65);
+            }
+
+            // Stagger-stop each digit; collect deceleration promises
+            const stopPromises = [];
+            for (let i = 0; i < numDigits; i++) {
+              await wait(i === 0 ? spinDelay + 400 : spinDelay);
+              stopPromises.push(stopSlotSpin(i));
+            }
+
+            // Wait for all reels to finish decelerating
+            await Promise.all(stopPromises);
+            resolve();
+          });
+
+        const updatePrizeSelect = () => {
+          prizeSelect.innerHTML = "";
+          let has = false;
+          prizes.forEach((p, i) => {
+            const opt = document.createElement("option");
+            opt.value = i;
+            opt.textContent = `${p.name} (Còn: ${p.remaining}/${p.quantity})`;
+            opt.className = "bg-dark text-white";
+            if (p.remaining === 0) {
+              opt.disabled = true;
+              opt.textContent += " - HẾT";
+            } else has = true;
+            prizeSelect.appendChild(opt);
+          });
+
+          // Only update button if not currently running a multi-sequence
+          if (!isMultiRunning) {
+            startBtn.disabled = !has;
+            startBtn.querySelector("span").textContent = has
+              ? "QUAY SỐ"
+              : "HẾT GIẢI";
+          }
+        };
+
+        const initializeApp = (isRestore = false) => {
+          create3DCubes(lotteryDisplay, numDigits);
+          updatePrizeSelect();
+          if (battleStage) {
+            battleStage.classList.add("hidden");
+            battleStage.classList.remove("is-clashing");
+          }
+
+          if (!isRestore) {
+            winners = [];
+            pairs = [];
+            recentWinnersList.innerHTML = "";
+            pairsList.innerHTML = "";
+            historyBody.innerHTML = "";
+            document.getElementById("count-winners").textContent = "0";
+            document.getElementById("count-pairs").textContent = "0";
+          }
+
+          startBtn.disabled = false;
+          setupView.classList.add("hidden");
+          mainView.classList.remove("hidden");
+          mainView.classList.add("flex");
+          mainView.classList.remove("view-enter");
+          void mainView.offsetWidth;
+          mainView.classList.add("view-enter");
+
+          saveSession();
+        };
+
+        const updateListUI = (winner, prizeName) => {
+          recentWinnersList.prepend(
+            createWinnerListItem(winner, prizeName, true),
+          );
+          const winnerCounter = document.getElementById("count-winners");
+          winnerCounter.textContent = recentWinnersList.children.length;
+          pulseCounter(winnerCounter);
+
+          if (!pairingEnabled) {
+            const row = document.createElement("tr");
+            row.className = "hover:bg-white/5 transition";
+            row.innerHTML = `<td class="p-3 border-b border-white/5 text-accent">${prizeName}</td><td class="p-3 border-b border-white/5 font-mono">${winner.ma_so}</td><td class="p-3 border-b border-white/5 font-bold">${winner.ten_kh}</td>`;
+            historyBody.prepend(row);
+          }
+
+          if (pairingEnabled) {
+            if (!pendingPartner) {
+              pendingPartner = winner;
+              renderBattleWaiting(winner, prizeName);
+            } else {
+              const p1 = pendingPartner;
+              const p2 = winner;
+              pendingPartner = null;
+              const newPair = { a: p1, b: p2, prizeName: prizeName };
+              pairs.push(newPair);
+              renderBattleMatch(p1, p2, prizeName);
+
+              pairsList.prepend(
+                createPairListItem(newPair, pairs.length, true),
+              );
+              const pairCounter = document.getElementById("count-pairs");
+              pairCounter.textContent = pairsList.children.length;
+              pulseCounter(pairCounter);
+
+              const row = document.createElement("tr");
+              row.className = "hover:bg-white/5 transition";
+              row.innerHTML = `<td class="p-3 border-b border-white/5 text-accent">${prizeName}</td>
+                                         <td class="p-3 border-b border-white/5 font-bold">${p1.ten_kh} <span class="text-gray-500 text-xs">vs</span> ${p2.ten_kh}</td>
+                                         <td class="p-3 border-b border-white/5 font-mono text-xs text-gray-400">${p1.ma_so} - ${p2.ma_so}</td>`;
+              historyBody.prepend(row);
+            }
+          }
+        };
+
+        const triggerConfetti = () => {
+          if (typeof confetti === "function") {
+            const colors = ["#00f2ff", "#7000ff", "#ff0055", "#ffffff"];
+            confetti({
+              particleCount: 85,
+              angle: 58,
+              spread: 62,
+              startVelocity: 52,
+              origin: { x: 0.02, y: 0.72 },
+              colors,
+            });
+            confetti({
+              particleCount: 85,
+              angle: 122,
+              spread: 62,
+              startVelocity: 52,
+              origin: { x: 0.98, y: 0.72 },
+              colors,
+            });
+            setTimeout(() => confetti({
+              particleCount: 55,
+              spread: 95,
+              startVelocity: 28,
+              scalar: 0.85,
+              origin: { x: 0.5, y: 0.48 },
+              colors,
+            }), 180);
+          }
+        };
+
+        const finalizeSingleWinner = (winner, prize) => {
+          winnerNameSpan.textContent = winner.ten_kh;
+          winnerCodeSpan.textContent = winner.ma_so;
+          if (pairingEnabled) {
+            winnerInfo.classList.add("hidden");
+          } else {
+            winnerInfo.classList.remove("hidden");
+            playWinnerReveal();
+          }
+          waitingMsg.classList.add("hidden");
+
+          triggerConfetti();
+
+          updateListUI(winner, prize.name);
+          winners.push({ ...winner, prizeName: prize.name });
+          updatePrizeSelect();
+          prizeSelect.disabled = false;
+          startBtn.disabled = false;
+
+          saveSession();
+        };
+
+        const runSingleLottery = async (winner, prize) => {
+          setDrawVisualState(true);
+          startBtn.disabled = true;
+          prizeSelect.disabled = true;
+          winnerInfo.classList.add("hidden");
+          waitingMsg.classList.remove("hidden");
+          waitingMsg.textContent = "Đang quay số...";
+          if (pairingEnabled) prepareBattleForSpin(prize.name);
+
+          document.querySelectorAll(".slot-wrap").forEach((el) => el.classList.remove("is-highlighted"));
+
+          await stopDigitsSequentially(winner.ma_so);
+          setDrawVisualState(false);
+
+          tempWinner = winner;
+          tempPrize = prize;
+          document.getElementById("modal-winner-name").textContent =
+            winner.ten_kh;
+          document.getElementById("modal-winner-code").textContent =
+            winner.ma_so;
+
+          const modal = document.getElementById("confirmation-modal");
+          const content = document.getElementById("confirm-content");
+          if (modal && content) {
+            modal.classList.remove("hidden");
+            setTimeout(() => {
+              modal.classList.remove("opacity-0");
+              content.classList.remove("scale-95");
+              content.classList.add("scale-100");
+            }, 10);
+          }
+        };
+
+        const runMultiLottery = async (prize) => {
+          isMultiRunning = true;
+          isMultiPaused = false;
+          setDrawVisualState(true);
+          startBtn.querySelector("span").textContent = "TẠM DỪNG";
+
+          // Keep button enabled so we can pause
+          startBtn.disabled = false;
+          prizeSelect.disabled = true;
+
+          winnerInfo.classList.add("hidden");
+          waitingMsg.classList.remove("hidden");
+          waitingMsg.textContent = "Đang quay số...";
+          if (pairingEnabled) prepareBattleForSpin(prize.name);
+
+          const available = customers.filter((c) => !c.isWinner);
+          const count = Math.min(available.length, prize.remaining);
+
+          if (count === 0) {
+            await showAlert("Không còn ai để quay!");
+            isMultiRunning = false;
+            setDrawVisualState(false);
+            startBtn.disabled = false;
+            prizeSelect.disabled = false;
+            startBtn.querySelector("span").textContent = "QUAY SỐ";
+            return;
+          }
+
+          for (let i = 0; i < count; i++) {
+            // Check Pause before starting new spin
+            await checkPause();
+
+            const remainingPlayers = customers.filter((c) => !c.isWinner);
+            if (remainingPlayers.length === 0) break;
+
+            const idx = Math.floor(Math.random() * remainingPlayers.length);
+            const winner = remainingPlayers[idx];
+            winner.isWinner = true;
+
+            document.querySelectorAll(".slot-wrap").forEach((el) => el.classList.remove("is-highlighted"));
+
+            // Spin for this winner
+            if (pairingEnabled) prepareBattleForSpin(prize.name);
+            await stopDigitsSequentially(winner.ma_so);
+
+            waitingMsg.classList.add("hidden");
+            winnerNameSpan.textContent = winner.ten_kh;
+            winnerCodeSpan.textContent = winner.ma_so;
+            if (pairingEnabled) {
+              winnerInfo.classList.add("hidden");
+            } else {
+              winnerInfo.classList.remove("hidden");
+              playWinnerReveal();
+            }
+
+            updateListUI(winner, prize.name);
+            winners.push({ ...winner, prizeName: prize.name });
+
+            prize.remaining--;
+            updatePrizeSelect(); // Button text won't change here because isMultiRunning is true
+
+            saveSession();
+
+            // Check Pause after showing winner, before next delay
+            await checkPause();
+
+            if (i < count - 1) {
+              await wait(1500);
+              winnerInfo.classList.add("hidden");
+              if (pairingEnabled) {
+                waitingMsg.classList.add("hidden");
+              } else {
+                waitingMsg.classList.remove("hidden");
+              }
+            }
+          }
+
+          triggerConfetti();
+          isMultiRunning = false;
+          isMultiPaused = false;
+          setDrawVisualState(false);
+          prizeSelect.disabled = false;
+
+          // Update final button state
+          const hasPrizes = prizes.some((p) => p.remaining > 0);
+          startBtn.querySelector("span").textContent = hasPrizes
+            ? "QUAY SỐ"
+            : "HẾT GIẢI";
+          startBtn.disabled = !hasPrizes;
+        };
+
+        setupForm.addEventListener("submit", async (e) => {
+          e.preventDefault();
+
+          const titleInput = document
+            .getElementById("lottery-title-input")
+            .value.trim();
+          const titleDisplay = document.getElementById("lottery-title-display");
+
+          if (titleInput) {
+            titleDisplay.textContent = titleInput;
+            titleDisplay.classList.remove("hidden");
+          } else {
+            titleDisplay.classList.add("hidden");
+          }
+
+          const bgFile = document.getElementById("background-file").files[0];
+          if (bgFile) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+              document.body.style.backgroundImage = `url('${ev.target.result}')`;
+              document.body.style.backgroundSize = "cover";
+              document.body.style.backgroundPosition = "center";
+              document.body.style.backgroundRepeat = "no-repeat";
+              document.body.style.backgroundAttachment = "fixed";
+            };
+            reader.readAsDataURL(bgFile);
+          }
+
+          const file = document.getElementById("customer-file").files[0];
+          if (!file) return;
+
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            try {
+              customers = parseCSV(ev.target.result);
+              if (customers.length === 0) throw new Error("Danh sách rỗng");
+
+              prizes = [];
+              prizesContainer
+                .querySelectorAll("div.prize-row")
+                .forEach((div) => {
+                  const inputs = div.querySelectorAll("input");
+                  const name = inputs[0].value.trim();
+                  const qty = parseInt(inputs[1].value);
+                  if (name && qty > 0)
+                    prizes.push({ name, quantity: qty, remaining: qty });
+                });
+              if (prizes.length === 0) throw new Error("Chưa nhập giải thưởng");
+
+              numDigits = parseInt(document.getElementById("num-digits").value);
+              isMultiWinnerMode =
+                document.getElementById("multi-winner-mode").checked;
+              pairingEnabled = document.getElementById("pairing-mode").checked;
+
+              if (pairingEnabled) {
+                tabBtnPairs.classList.remove("hidden");
+              } else {
+                tabBtnPairs.classList.add("hidden");
+                document.querySelector('[data-tab="tab-winners"]').click();
+              }
+
+              initializeApp();
+            } catch (err) {
+              showAlert(err.message);
+            }
+          };
+          reader.readAsText(file);
+        });
+
+        startBtn.addEventListener("click", () => {
+          // If running in multi mode, handle pause/resume
+          if (isMultiWinnerMode && isMultiRunning) {
+            if (isMultiPaused) {
+              // Resume
+              isMultiPaused = false;
+              setDrawVisualState(true, false);
+              startBtn.querySelector("span").textContent = "TẠM DỪNG";
+              if (resumeMulti) resumeMulti();
+            } else {
+              // Pause
+              isMultiPaused = true;
+              setDrawVisualState(true, true);
+              startBtn.querySelector("span").textContent = "TIẾP TỤC";
+            }
+            return; // Don't start new draw
+          }
+
+          const idx = prizeSelect.value;
+          if (!prizes[idx]) return;
+          const prize = prizes[idx];
+          const available = customers.filter((c) => !c.isWinner);
+
+          if (available.length === 0) {
+            showAlert("Đã hết người chơi!");
+            return;
+          }
+
+          if (isMultiWinnerMode) {
+            runMultiLottery(prize);
+          } else {
+            const rIdx = Math.floor(Math.random() * available.length);
+            const winner = available[rIdx];
+            runSingleLottery(winner, prize);
+          }
+        });
+
+        const hideConfirm = () => {
+          const modal = document.getElementById("confirmation-modal");
+          const content = document.getElementById("confirm-content");
+          if (modal && content) {
+            content.classList.remove("scale-100");
+            content.classList.add("scale-95");
+            modal.classList.add("opacity-0");
+            setTimeout(() => modal.classList.add("hidden"), 300);
+          }
+        };
+
+        confirmBtn.addEventListener("click", () => {
+          if (tempWinner && tempPrize) {
+            const realWinner = customers.find(
+              (c) => c.ma_so === tempWinner.ma_so,
+            );
+            if (realWinner) realWinner.isWinner = true;
+            tempPrize.remaining--;
+            finalizeSingleWinner(tempWinner, tempPrize);
+            tempWinner = null;
+            tempPrize = null;
+            hideConfirm();
+          }
+        });
+
+        redrawBtn.addEventListener("click", () => {
+          tempWinner = null;
+          tempPrize = null;
+          hideConfirm();
+          resetSlotDisplay();
+          waitingMsg.textContent = "Đã hủy kết quả. Sẵn sàng quay lại.";
+          if (pairingEnabled) restorePairingDisplay();
+          startBtn.disabled = false;
+          prizeSelect.disabled = false;
+        });
+
+        const tabBtns = document.querySelectorAll(".tab-btn");
+        tabBtns.forEach((btn) => {
+          btn.addEventListener("click", () => {
+            tabBtns.forEach((b) => {
+              b.classList.remove("is-active", "bg-white/10", "text-white");
+              b.classList.add("text-gray-400");
+            });
+            btn.classList.add("is-active", "bg-white/10", "text-white");
+            btn.classList.remove("text-gray-400");
+            const tabId = btn.dataset.tab;
+            document
+              .querySelectorAll(".tab-panel")
+              .forEach((p) => p.classList.add("hidden"));
+            document.getElementById(tabId).classList.remove("hidden");
+          });
+        });
+
+        const updateVisuals = () => {
+          const alpha = document.getElementById("opacity-range").value;
+          const blur = document.getElementById("blur-range").value;
+          document.documentElement.style.setProperty("--panel-alpha", alpha);
+          document.documentElement.style.setProperty(
+            "--panel-blur",
+            blur + "px",
+          );
+          document.getElementById("opacity-label").textContent = alpha;
+          document.getElementById("blur-label").textContent = blur + "px";
+        };
+        document
+          .getElementById("opacity-range")
+          .addEventListener("input", updateVisuals);
+        document
+          .getElementById("blur-range")
+          .addEventListener("input", updateVisuals);
+
+        document.addEventListener("keydown", (e) => {
+          if (e.key === " ") {
+            if (!startBtn.disabled && !setupView.classList.contains("hidden"))
+              return;
+            if (
+              !startBtn.disabled &&
+              document
+                .getElementById("confirmation-modal")
+                .classList.contains("hidden")
+            ) {
+              e.preventDefault();
+              startBtn.click();
+            }
+          }
+          if (e.key === "F1") {
+            e.preventDefault();
+
+            if (
+              document
+                .getElementById("history-panel")
+                .classList.contains("hidden")
+            ) {
+              renderHistoryTable();
+            }
+
+            const panel = document.getElementById("history-panel");
+            if (panel) panel.classList.toggle("hidden");
+          }
+        });
+
+        document
+          .getElementById("close-history-btn")
+          .addEventListener("click", () => {
+            const panel = document.getElementById("history-panel");
+            if (panel) panel.classList.add("hidden");
+          });
+
+        document.getElementById("export-btn").addEventListener("click", () => {
+          if (pairingEnabled) {
+            if (pairs.length === 0) return showAlert("Chưa có cặp đôi nào!");
+            const csvContent =
+              "data:text/csv;charset=utf-8,\uFEFF" +
+              "Giai,Cap Dau,Ma So Cap\n" +
+              pairs
+                .map(
+                  (p) =>
+                    `${p.prizeName},${p.a.ten_kh} vs ${p.b.ten_kh},${p.a.ma_so} - ${p.b.ma_so}`,
+                )
+                .join("\n");
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "ket_qua_lucky_draw_cap_doi.csv");
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+          } else {
+            if (winners.length === 0) return showAlert("Chưa có dữ liệu!");
+            const csvContent =
+              "data:text/csv;charset=utf-8,\uFEFF" +
+              "Giai,Ma So,Ten Khach Hang\n" +
+              winners
+                .map((w) => `${w.prizeName},${w.ma_so},${w.ten_kh}`)
+                .join("\n");
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "ket_qua_lucky_draw.csv");
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+          }
+        });
+
+        document.getElementById("reset-btn").addEventListener("click", () => {
+          if (confirm("Bạn muốn xóa hết và quay về màn hình cài đặt?")) {
+            clearSession(); // CLEAR SESSION ON RESET
+            location.reload();
+          }
+        });
+
+        const toggleHistoryBtn = document.getElementById("toggle-history-btn");
+        if (toggleHistoryBtn) {
+          toggleHistoryBtn.addEventListener("click", () => {
+            const panel = document.getElementById("history-panel");
+            renderHistoryTable(); // Update before showing
+            if (panel) panel.classList.remove("hidden");
+          });
+        }
+
+        const initParticles = () => {
+          const canvas = document.getElementById("bg-canvas");
+          if (!canvas) return;
+          const ctx = canvas.getContext("2d");
+          if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            return;
+          }
+          let particles = [];
+          const resize = () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+          };
+          window.addEventListener("resize", resize);
+          resize();
+
+          class Particle {
+            constructor() {
+              this.reset();
+            }
+            reset() {
+              this.x = Math.random() * canvas.width;
+              this.y = Math.random() * canvas.height;
+              this.size = Math.random() * 2;
+              this.speedX = Math.random() * 0.5 - 0.25;
+              this.speedY = Math.random() * 0.5 - 0.25;
+              this.opacity = Math.random() * 0.5;
+              this.color = Math.random() > 0.5 ? "#00f2ff" : "#7000ff";
+            }
+            update() {
+              this.x += this.speedX;
+              this.y += this.speedY;
+              if (
+                this.x < 0 ||
+                this.x > canvas.width ||
+                this.y < 0 ||
+                this.y > canvas.height
+              )
+                this.reset();
+            }
+            draw() {
+              ctx.fillStyle = this.color;
+              ctx.globalAlpha = this.opacity;
+              ctx.beginPath();
+              ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+          for (let i = 0; i < 60; i++) particles.push(new Particle());
+          const animate = () => {
+            if (!document.hidden) {
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              particles.forEach((p) => {
+                p.update();
+                p.draw();
+              });
+            }
+            requestAnimationFrame(animate);
+          };
+          animate();
+        };
+        // Canvas particles are intentionally disabled. Redrawing a full-screen
+        // canvas behind backdrop-filter panels can cause GPU flicker on Chrome/Edge.
+      });
+    </script>
+  </body>
+</html>
